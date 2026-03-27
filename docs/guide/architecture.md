@@ -14,6 +14,10 @@ runtime/pipeline.nu              ← Profile switch & main orchestrator
 engine/parser.nu                 ← Parses .envctl.toml into a full AST
                                    Uses language/grammar.nu for tokenization
     ↓
+engine/ast/envfile.nu            ← Full AST → envfile subtree  (profile: envfile + all)
+engine/ast/secrets.nu            ← Full AST → secrets subtree  (profile: secrets + all)
+engine/ast/certs.nu              ← Full AST → certs subtree    (profile: certs + all)
+    ↓
 engine/validator.nu              ← Schema checks & token linking via manifest.provides
     ↓
 engine/plan.nu                   ← Validated AST + Profile → ExecutionPlan
@@ -32,11 +36,12 @@ pipeline.nu writes lock + state  ← After success (only if not dry-run)
 | Layer | Responsibility |
 |---|---|
 | `language/` | Pure utilities for tokenization, keyword registry, and `.env.example` parsing. |
-| `engine/` | The core compiler logic: parsing, validation, planning, execution, and diffing. |
-| `schema/` | Universal validation engine that enforces TOML schemas. |
+| `engine/` | The core compiler logic: parsing, AST projection, validation, planning, execution, and diffing. |
+| `schema/` | Universal validation engine that enforces TOML schemas. No project-specific knowledge. |
 | `runtime/` | Orchestration: assembling the execution context, loading plugins, and dispatching tasks. |
 | `state/` | Reproducibility and audit: managing the `.envctl.lock` and `.envctl.state.ndjson` files. |
-| `commands/` | The CLI interface that translates user input into pipeline calls. |
+| `commands/` | The CLI interface that translates user input into pipeline calls. Never calls engine directly. |
+| `core/` | Constants and structured logging shared across all layers. |
 | `plugins/` | Payloads for providers and backends that extend the system's capabilities. |
 
 ## Plugin Boundary Rules
