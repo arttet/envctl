@@ -57,8 +57,9 @@ runtime/pipeline.nu              ← profile switch — main orchestrator
 engine/parser.nu                 ← .envctl.toml → full AST
                                    uses language/grammar.nu for {{ }} tokenization
     ↓
-engine/envfile_ast.nu            ← full AST → envfile subtree   (profile: envfile + all)
-engine/secrets_ast.nu            ← full AST → secrets subtree   (profile: secrets + all)
+engine/ast/envfile.nu            ← full AST → envfile subtree   (profile: envfile + all)
+engine/ast/secrets.nu            ← full AST → secrets subtree   (profile: secrets + all)
+engine/ast/certs.nu              ← full AST → certs subtree     (profile: certs + all)
     ↓
 engine/validator.nu              ← schema checks + token linking via manifest.provides
     ↓
@@ -78,7 +79,7 @@ pipeline.nu writes lock + state  ← only after executor succeeds, only if not d
 | Layer | Responsibility | Key files |
 |---|---|---|
 | `language/` | Pure language utilities — tokenization, .env.example parsing, keywords | `grammar.nu`, `keywords.nu` |
-| `engine/` | Formal compiler: parse → project → validate → plan → execute → diff | `parser.nu`, `envfile_ast.nu`, `secrets_ast.nu`, `validator.nu`, `plan.nu`, `executor.nu`, `diff.nu`, `queries.nu` |
+| `engine/` | Formal compiler: parse → project → validate → plan → execute → diff | `parser.nu`, `ast/envfile.nu`, `ast/secrets.nu`, `ast/certs.nu`, `validator.nu`, `plan.nu`, `executor.nu`, `diff.nu`, `queries.nu` |
 | `schema/` | Universal validation engine — no project knowledge | `validate.nu` |
 | `runtime/` | Orchestration — ctx, pipeline, provider/backend loading, dispatch, health | `ctx.nu`, `pipeline.nu`, `providers/`, `backends/`, `health/` |
 | `state/` | Reproducibility and audit — lock file, state log | `lock.nu`, `state.nu` |
@@ -105,7 +106,8 @@ pipeline.nu writes lock + state  ← only after executor succeeds, only if not d
 ## Repository Structure
 
 ```text
-envctl.nu                            # Entry point — export-env + init + generate
+envctl.nu                            # Entry point — export-env + commands
+install.nu                           # Installer — copies files + writes autoload hook
 .envctl.toml                         # Project config — ALWAYS this extension
 .envctl.example                      # Config template — copy to .envctl.toml
 .envctl.lock                         # Auto-generated — commit this file
@@ -143,8 +145,10 @@ src/
 
   engine/                            # Formal compiler — all compile phases
     parser.nu                        # .envctl.toml → full AST (absorbs config/loader + defaults)
-    envfile_ast.nu                   # full AST → envfile subtree
-    secrets_ast.nu                   # full AST → secrets subtree
+    ast/
+      envfile.nu                     # full AST → envfile subtree
+      secrets.nu                     # full AST → secrets subtree
+      certs.nu                       # full AST → certs subtree
     validator.nu                     # schema + token linking + manifest.provides
     plan.nu                          # validated AST + profile → ExecutionPlan
     executor.nu                      # ExecutionPlan → side effects + .env render
@@ -175,11 +179,14 @@ src/
   core/
     constants.nu                     # DEFAULT_* path constants
     log.nu                           # log info | warn | error | success | detail
+    backup.nu                        # backup helpers for rotate operations
 
   commands/
     envfile.nu                       # envctl envfile generate | diff
     secrets.nu                       # envctl secrets generate | rotate | rotate-all
-    certs.nu                         # envctl certs status | renew | renew-all
+    certs.nu                         # envctl certs status | generate | rotate | rotate-all
+    generate.nu                      # envctl generate — profile=all shortcut
+    init.nu                          # envctl init — scaffold .envctl.toml + .gitignore
     plugins.nu                       # envctl plugins list
     health.nu                        # envctl health [--profile] — thin CLI wrapper over runtime/health/run.nu
 ```
@@ -434,7 +441,7 @@ var_expr      ::= IDENT
 ## CLI Commands
 
 ```
-envctl init                              # scaffold .envctl.toml
+envctl init                              # scaffold .envctl.toml + .gitignore entries
 
 envctl envfile generate                  # compile + write .env
 envctl envfile generate --dry-run
@@ -445,18 +452,19 @@ envctl secrets generate --dry-run
 envctl secrets rotate --key NAME         # overwrite + backup one secret
 envctl secrets rotate-all
 
+envctl certs generate [--name NAME]      # generate PKI certificate chain
+envctl certs rotate --name NAME          # rotate + backup one cert
+envctl certs rotate-all
 envctl certs status                      # cert secrets: expiry, chain, trust
-envctl certs renew --key NAME
-envctl certs renew-all
 
-envctl generate                          # profile=all (envfile + secrets)
+envctl generate                          # profile=all (envfile + secrets + certs)
 envctl generate --dry-run
 
 envctl health
 envctl health --profile envfile
 envctl health --profile secrets
 
-envctl providers list
+envctl plugins list
 ```
 
 ---
@@ -664,13 +672,40 @@ nu envctl.nu envctl generate
 nu envctl.nu envctl envfile generate --stage dev
 nu envctl.nu envctl secrets generate
 nu envctl.nu envctl health
-nu envctl.nu envctl providers list
+nu envctl.nu envctl plugins list
 ```
+
+## Install
+
+```nushell
+# From GitHub (no clone needed)
+http get https://raw.githubusercontent.com/arttet/envctl/main/install.nu | into string | nu -c $in
+
+# From a cloned repo
+nu install.nu
+nu install.nu --prefix ~/.envctl
+nu install.nu --dry-run
+nu install.nu --uninstall
+```
+
+After installation all `envctl` commands are available directly — no `nu envctl.nu` prefix needed.
 
 ## Running Tests
 
+76 unit tests across 7 files. All must pass before merging.
+
 ```nushell
-nu run_tests.nu
-nu run_tests.nu --unit
-nu run_tests.nu --file tests/unit/grammar_test.nu
+nu run_tests.nu                                    # all tests
+nu run_tests.nu --unit                             # unit tests only
+nu run_tests.nu --file tests/unit/grammar_test.nu  # single file
 ```
+
+| Test file | Coverage |
+|---|---|
+| `grammar_test.nu` | Token parsing, classification, resolution (24) |
+| `keywords_test.nu` | Reserved words, profiles, service keys (17) |
+| `parser_test.nu` | AST building, cert variables (7) |
+| `schema_test.nu` | Config validation, defaults (6) |
+| `lock_test.nu` | Lock file read/write, version checking (8) |
+| `backend_test.nu` | File backend manifest and operations (5) |
+| `provider_test.nu` | Git + password provider contracts (9) |

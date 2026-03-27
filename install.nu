@@ -269,3 +269,9 @@ def os-extract-zip [zip_path: string, dest_dir: string]: nothing -> nothing {
         unzip -q $zip_path -d $dest_dir
     }
 }
+
+# When piped into `nu -c` (e.g. http get ... | into string | nu -c $in),
+# CURRENT_FILE is absent — main is not auto-invoked, so we call it explicitly.
+if ($env | get --optional CURRENT_FILE | is-empty) {
+    main
+}
