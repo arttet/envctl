@@ -57,7 +57,7 @@ def main [
 
     # Determine source: local repo if envctl.nu exists next to this script,
     # otherwise fall back to downloading from GitHub.
-    let script_dir = ($env | get --optional CURRENT_FILE | path dirname)
+    let script_dir = ($env | get --optional CURRENT_FILE | default "" | path dirname)
     let has_local  = (not ($script_dir | is-empty)) and ($script_dir | path join "envctl.nu" | path exists)
 
     if $has_local {
