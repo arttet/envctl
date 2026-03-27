@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install Nushell
+        uses: hustcer/setup-nu@v3
+        with:
+          check-latest: true
+
+      - name: Install openssl
+        run: sudo apt install -y openssl
+
+      - name: Run unit tests
+        run: nu run_tests.nu

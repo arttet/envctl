@@ -1,0 +1,32 @@
+# ==============================================================================
+# Leaf certificate config template — server or client
+# Tokens resolved from [certs] scalar fields + [certs.NAME] scalar fields
+#
+# Required tokens:
+#   {{ KEY_BITS }}           — from [certs] key_bits
+#   {{ COMMON_NAME }}        — from [certs.NAME] common_name
+#   {{ ORGANIZATION }}       — from [certs] organization
+#   {{ COUNTRY }}            — from [certs] country
+#   {{ EXTENDED_KEY_USAGE }} — from [certs.NAME] extended_key_usage
+#   {{ SUBJECT_ALT_NAME }}   — from [certs.NAME] subject_alt_name
+# ==============================================================================
+
+[ req ]
+default_bits       = {{ KEY_BITS }}
+default_md         = sha256
+prompt             = no
+req_extensions     = v3_leaf
+distinguished_name = dn
+
+[ dn ]
+CN = {{ COMMON_NAME }}
+O  = {{ ORGANIZATION }}
+C  = {{ COUNTRY }}
+
+[ v3_leaf ]
+basicConstraints       = CA:FALSE
+keyUsage               = critical, digitalSignature, keyEncipherment
+extendedKeyUsage       = {{ EXTENDED_KEY_USAGE }}
+subjectKeyIdentifier   = hash
+authorityKeyIdentifier = keyid, issuer
+subjectAltName         = {{ SUBJECT_ALT_NAME }}

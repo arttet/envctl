@@ -1,0 +1,219 @@
+# .envctl.toml — envctl project configuration
+# Copy to .envctl.toml and adjust for your project.
+# Commit to repository — contains no secrets.
+# .envctl.lock is auto-generated — commit it too.
+
+schema = "v1"
+
+# ---------------------------------------------------------------------------
+# Envfile — generate .env from .env.example template
+# ---------------------------------------------------------------------------
+
+[envfile]
+file    = ".env"
+pattern = ".env.example"
+excluded = []
+
+# ---------------------------------------------------------------------------
+# Secrets — base directory for file backend (relative to project root)
+# ---------------------------------------------------------------------------
+
+[secrets]
+base_dir = "."
+excluded = []
+
+# ---------------------------------------------------------------------------
+# Providers — explicitly enabled, only what your project needs
+# ---------------------------------------------------------------------------
+
+[providers]
+enabled = ["git", "password", "compose", "certs"]
+
+# ---------------------------------------------------------------------------
+# Generators — resolved before envfile/secrets/certs phases
+#
+# Token forms:
+#   KEY = "{{ provider:NAME.FN }}"          call provider function
+#   KEY = "{{ OTHER_KEY }}/subpath"         compose from another generator
+#   KEY = "literal string"                  static value
+#
+# Available provider functions:
+#   {{ provider:git.top-level-dir }}
+#   {{ provider:compose.collect-files }}
+#   {{ provider:compose.path-separator }}
+#   {{ provider:password.generate-password }}
+# ---------------------------------------------------------------------------
+
+[generators]
+GIT_ROOT_DIR = "{{ provider:git.top-level-dir }}"
+
+# Composition example:
+# SECRETS_DIR = "{{ GIT_ROOT_DIR }}/secrets"
+# DB_DSN      = "mysql://{{ DB_USER }}:{{ secret:DB_PASS_FILE }}@{{ DB_HOST }}/{{ DB_NAME }}"
+
+# ---------------------------------------------------------------------------
+# Password generator config (optional — these are the defaults)
+# ---------------------------------------------------------------------------
+
+[providers.password]
+length  = 32
+charset = "alphanumeric"   # alphanumeric | base64 | hex | symbols
+# tool = "openssl"         # openssl | pwgen
+
+# ---------------------------------------------------------------------------
+# Compose provider (add "compose" to providers.enabled to use)
+# ---------------------------------------------------------------------------
+
+# [providers.compose]
+# base_dir   = "{{ GIT_ROOT_DIR }}/deployments/compose"
+# base_files = ["compose.yml"]
+#
+# [providers.compose.services.app]
+# default = true
+#
+# [providers.compose.services.db]
+# default = true
+
+# ---------------------------------------------------------------------------
+# Secrets — explicit declarations
+#
+# [secrets.VAR_NAME]
+# value_source = "{{ provider:NAME.FN }}"
+# targets      = ["file"]
+#
+# [secrets.VAR_NAME.options.file]
+# path = "{{ GIT_ROOT_DIR }}/secrets/filename"
+# ---------------------------------------------------------------------------
+
+# [secrets.DB_PASSWORD_FILE]
+# value_source = "{{ provider:password.generate-password }}"
+# targets      = ["file"]
+#
+# [secrets.DB_PASSWORD_FILE.options.file]
+# path = "{{ GIT_ROOT_DIR }}/secrets/db_password"
+
+# [secrets.APP_SECRET_KEY_FILE]
+# value_source = "{{ provider:password.generate-password }}"
+# targets      = ["file"]
+#
+# [secrets.APP_SECRET_KEY_FILE.options.file]
+# path = "{{ GIT_ROOT_DIR }}/secrets/app_secret_key"
+
+# ---------------------------------------------------------------------------
+# Certificates — root → intermediate → server chain
+#
+# How it works:
+#   - Scalar fields in [certs] are template variables injected into all .cnf.tmpl files
+#     as {{ KEY_BITS }}, {{ ORGANIZATION }}, {{ COUNTRY }}
+#   - Record fields in [certs] are cert declarations, sorted by signed_by automatically
+#   - Each cert references a .cnf.tmpl template in infra/certs/
+#   - signed_by = "NAME" links a cert to its signer; empty = self-signed Root CA
+#
+# Commands:
+#   envctl certs generate                # generate all certs in topo order
+#   envctl certs generate --name server  # generate server only (signers read from disk)
+#   envctl certs rotate   --name server  # overwrite + backup server cert
+#   envctl certs status                  # check expiry and chain health
+#
+# Templates live in infra/certs/ — see root-ca.cnf.tmpl, intermediate-ca.cnf.tmpl,
+# and leaf.cnf.tmpl for the required {{ token }} placeholders.
+# ---------------------------------------------------------------------------
+
+# Step 1: add "certs" to providers.enabled
+# [providers]
+# enabled = ["git", "password", "certs"]
+
+# Step 2: shared cert settings — values injected into every .cnf.tmpl
+# [certs]
+# tool         = "openssl"   # only openssl supported
+# key_bits     = 4096
+# organization = "My Project"
+# country      = "US"
+
+# ---------------------------------------------------------------------------
+# Root CA — self-signed, long-lived anchor of trust.
+# Never exposed to clients directly; only used to sign the intermediate.
+# ---------------------------------------------------------------------------
+# [certs.root]
+# config_template = "{{ GIT_ROOT_DIR }}/infra/certs/root-ca.cnf.tmpl"
+# common_name     = "My Project Root CA"
+# days            = 3650
+# targets         = ["file"]
+#
+# [certs.root.options.file]
+# cert = "{{ GIT_ROOT_DIR }}/secrets/certs/root.crt"
+# key  = "{{ GIT_ROOT_DIR }}/secrets/certs/root.key"
+
+# ---------------------------------------------------------------------------
+# Intermediate CA — signed by root, issues all server and client certs.
+# pathlen:0 in the template means it cannot sign other CAs.
+# Rotate every ~5 years; keep root offline.
+# ---------------------------------------------------------------------------
+# [certs.intermediate]
+# config_template = "{{ GIT_ROOT_DIR }}/infra/certs/intermediate-ca.cnf.tmpl"
+# signed_by       = "root"
+# common_name     = "My Project Intermediate CA"
+# days            = 1825
+# targets         = ["file"]
+#
+# [certs.intermediate.options.file]
+# cert = "{{ GIT_ROOT_DIR }}/secrets/certs/intermediate.crt"
+# key  = "{{ GIT_ROOT_DIR }}/secrets/certs/intermediate.key"
+
+# Intermediate CA — signed by root, pathlen:0 (cannot sign other CAs)
+[certs.intermediate]
+type            = "ca"
+config_template = "{{ GIT_ROOT_DIR }}/infra/certs/intermediate-ca.cnf.tmpl"
+signed_by       = "root"
+common_name     = "My Project Intermediate CA"
+days            = 1825
+targets         = ["file"]
+
+[certs.intermediate.options.file]
+cert = "{{ GIT_ROOT_DIR }}/secrets/certs/intermediate/intermediate.crt"
+key  = "{{ GIT_ROOT_DIR }}/secrets/certs/intermediate/intermediate.key"
+
+# ---------------------------------------------------------------------------
+# Server cert — signed by intermediate.
+# Clients should trust the full chain: intermediate.crt → root.crt
+# Rotate yearly or when hostnames change.
+# ---------------------------------------------------------------------------
+# [certs.server]
+# config_template    = "{{ GIT_ROOT_DIR }}/infra/certs/leaf.cnf.tmpl"
+# signed_by          = "intermediate"
+# common_name        = "app.local"
+# extended_key_usage = "serverAuth"
+# subject_alt_name   = "DNS:app.local, DNS:localhost, IP:127.0.0.1"
+# days               = 365
+# targets            = ["file"]
+#
+# [certs.server.options.file]
+# cert = "{{ GIT_ROOT_DIR }}/secrets/certs/server.crt"
+# key  = "{{ GIT_ROOT_DIR }}/secrets/certs/server.key"
+
+# Server cert — signed by intermediate, presented to clients
+[certs.server]
+type               = "server"
+config_template    = "{{ GIT_ROOT_DIR }}/infra/certs/leaf.cnf.tmpl"
+signed_by          = "intermediate"
+common_name        = "app.local"
+extended_key_usage = "serverAuth"
+subject_alt_name   = "DNS:app.local, DNS:localhost, IP:127.0.0.1"
+days               = 365
+targets            = ["file"]
+
+[certs.server.options.file]
+cert = "{{ GIT_ROOT_DIR }}/secrets/certs/server/server.crt"
+key  = "{{ GIT_ROOT_DIR }}/secrets/certs/server/server.key"
+
+# ---------------------------------------------------------------------------
+# External cert — read from backend, never generated by envctl.
+# Use when the root CA lives outside this project (e.g. corporate CA).
+# ---------------------------------------------------------------------------
+# [certs.external_root]
+# external = true
+# targets  = ["file"]
+#
+# [certs.external_root.options.file]
+# cert = "/etc/ssl/corp-ca.crt"
+# key  = "/etc/ssl/corp-ca.key"

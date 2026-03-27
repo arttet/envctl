@@ -1,0 +1,7 @@
+# git provider health checks
+
+[[checks]]
+name = "git_available"
+type = "tool"
+tool = "git"
+severity = "warn"

@@ -1,0 +1,4 @@
+# git provider config schema — no required fields
+
+[meta]
+version = "v1"

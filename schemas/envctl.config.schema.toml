@@ -1,0 +1,42 @@
+# envctl top-level config schema — v1
+# All fields have defaults — empty .envctl.toml is valid.
+
+[meta]
+version = "v1"
+
+[fields.schema]
+type = "string"
+enum = ["v1"]
+default = "v1"
+
+[fields.providers]
+type = "record"
+default = {}
+
+[fields."providers.enabled"]
+type = "list<string>"
+default = []
+
+[fields.envfile]
+type = "record"
+default = {}
+
+[fields."envfile.file"]
+type = "string"
+default = ".env"
+
+[fields."envfile.pattern"]
+type = "string"
+default = ".env.example"
+
+[fields.secrets]
+type = "record"
+default = {}
+
+[fields."secrets.base_dir"]
+type = "string"
+default = "."
+
+[fields.generators]
+type = "record"
+default = {}
