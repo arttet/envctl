@@ -1,0 +1,6 @@
+*.nu text eol=lf
+*.just text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+*.cnf text eol=lf

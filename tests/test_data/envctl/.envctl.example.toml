@@ -1,0 +1,142 @@
+# ==============================================================================
+# .envctl.toml — envctl project configuration reference
+#
+# Copy to .envctl.toml and adjust for your project.
+# Commit to repository — contains no secrets.
+#
+# .envctl.lock      — auto-generated, commit this
+# .envctl.state.ndjson — local audit log, add to .gitignore
+# ==============================================================================
+
+schema = "v1"
+
+# ---------------------------------------------------------------------------
+# Generators — resolved top to bottom, support {{ }} cross-references
+# ---------------------------------------------------------------------------
+
+[generators]
+GIT_ROOT_DIR = "{{ provider:git.top-level-dir }}"
+SECRETS_PREFIX_DIR = "{{ GIT_ROOT_DIR }}/data/secrets"
+
+# ---------------------------------------------------------------------------
+# Providers — explicitly enabled
+# ---------------------------------------------------------------------------
+
+[providers]
+enabled = ["git", "password", "compose", "certs"]
+
+[providers.password]
+length = 32
+charset = "alphanumeric" # alphanumeric | base64 | hex | symbols
+
+# ---------------------------------------------------------------------------
+# Envfile — controls .env generation from .env.example template
+# ---------------------------------------------------------------------------
+
+[envfile]
+file = ".env"
+pattern = ".env.example"
+excluded = []
+
+# ---------------------------------------------------------------------------
+# Secrets — base directory for all secret files
+# ---------------------------------------------------------------------------
+
+[secrets]
+base_dir = "data/secrets"
+
+# ---------------------------------------------------------------------------
+# Certs — scalar fields become {{ }} tokens in .cnf.tmpl
+# Record fields are cert declarations (see below)
+# ---------------------------------------------------------------------------
+
+[certs]
+tool = "openssl"
+key_bits = 4096
+organization = "My Project"
+country = "US"
+
+# ---------------------------------------------------------------------------
+# Scenario A — generate full chain from scratch
+# ---------------------------------------------------------------------------
+
+[certs.root]
+config_template = "{{ GIT_ROOT_DIR }}/infra/certs/root-ca.cnf.tmpl"
+days = 3650
+common_name = "Dev Root CA"
+targets = ["file"]
+
+[certs.root.options.file]
+cert = "{{ SECRETS_PREFIX_DIR }}/certs/root/root.crt"
+key = "{{ SECRETS_PREFIX_DIR }}/certs/root/root.key"
+
+[certs.intermediate]
+signed_by = "root"
+config_template = "{{ GIT_ROOT_DIR }}/infra/certs/intermediate-ca.cnf.tmpl"
+days = 1825
+common_name = "Dev Intermediate CA"
+targets = ["file"]
+
+[certs.intermediate.options.file]
+cert = "{{ SECRETS_PREFIX_DIR }}/certs/intermediate/intermediate.crt"
+key = "{{ SECRETS_PREFIX_DIR }}/certs/intermediate/intermediate.key"
+
+# ---------------------------------------------------------------------------
+# Scenario B — intermediate already exists on disk, never regenerate
+# ---------------------------------------------------------------------------
+
+# [certs.intermediate]
+# external = true   # read from backend, never generate — targets must have exactly one entry
+# targets  = ["file"]
+#
+# [certs.intermediate.options.file]
+# cert = "{{ SECRETS_PREFIX_DIR }}/certs/intermediate/intermediate.crt"
+# key  = "{{ SECRETS_PREFIX_DIR }}/certs/intermediate/intermediate.key"
+
+# ---------------------------------------------------------------------------
+# Leaf certs — signed by intermediate, one template reused for all
+# ---------------------------------------------------------------------------
+
+[certs.app]
+signed_by = "intermediate"
+config_template = "{{ GIT_ROOT_DIR }}/infra/certs/leaf.cnf.tmpl"
+days = 365
+common_name = "app.dev.local"
+subject_alt_name = "DNS:app.dev.local, DNS:localhost, IP:127.0.0.1"
+extended_key_usage = "serverAuth"
+targets = ["file"]
+
+[certs.app.options.file]
+cert = "{{ SECRETS_PREFIX_DIR }}/certs/app/app.crt"
+key = "{{ SECRETS_PREFIX_DIR }}/certs/app/app.key"
+
+[certs.grafana]
+signed_by = "intermediate"
+config_template = "{{ GIT_ROOT_DIR }}/infra/certs/leaf.cnf.tmpl"
+days = 365
+common_name = "grafana.dev.local"
+subject_alt_name = "DNS:grafana.dev.local, DNS:localhost"
+extended_key_usage = "serverAuth"
+targets = ["file"]
+
+[certs.grafana.options.file]
+cert = "{{ SECRETS_PREFIX_DIR }}/certs/grafana/grafana.crt"
+key = "{{ SECRETS_PREFIX_DIR }}/certs/grafana/grafana.key"
+
+# ---------------------------------------------------------------------------
+# Secrets — password-based
+# ---------------------------------------------------------------------------
+
+[secrets.GRAFANA_ADMIN_PASSWORD_FILE]
+value_source = "{{ provider:password.generate-password }}"
+targets = ["file"]
+
+[secrets.GRAFANA_ADMIN_PASSWORD_FILE.options.file]
+path = "{{ SECRETS_PREFIX_DIR }}/grafana_admin_password"
+
+[secrets.MYSQL_ROOT_PASSWORD_FILE]
+value_source = "{{ provider:password.generate-password }}"
+targets = ["file"]
+
+[secrets.MYSQL_ROOT_PASSWORD_FILE.options.file]
+path = "{{ SECRETS_PREFIX_DIR }}/mysql_root_password"

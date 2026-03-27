@@ -1,0 +1,34 @@
+# Runtime ctx schema — validated after build-ctx assembles execution state.
+# All fields have defaults — ctx is always valid if config loaded successfully.
+
+[meta]
+version = "v1"
+
+[fields.stage]
+type = "string"
+enum = ["dev", "staging", "prod"]
+default = "dev"
+
+[fields.env_file]
+type = "string"
+default = ".env"
+
+[fields.template]
+type = "string"
+default = ".env.example"
+
+[fields.secrets_root]
+type = "string"
+default = "."
+
+[fields.dry_run]
+type = "bool"
+default = false
+
+[fields.quiet]
+type = "bool"
+default = false
+
+[fields.env_vars]
+type = "record"
+default = {}

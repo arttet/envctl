@@ -1,0 +1,17 @@
+# compose provider config schema
+
+[meta]
+version = "v1"
+
+[fields.base_dir]
+type = "string"
+required = false
+default = "."
+
+[fields.base_files]
+type = "list<string>"
+default = ["compose.yml"]
+
+[fields.services]
+type = "record"
+default = {}

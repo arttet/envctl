@@ -1,0 +1,17 @@
+# Schema for certs provider health check record
+
+[fields.ok]
+type = "bool"
+required = true
+
+[fields.info]
+type = "string"
+required = true
+
+[fields.expires_at]
+type = "string"
+required = false
+
+[fields.days_left]
+type = "int"
+required = false

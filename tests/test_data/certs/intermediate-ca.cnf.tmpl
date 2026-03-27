@@ -1,0 +1,28 @@
+# ==============================================================================
+# Intermediate CA config template
+# Tokens resolved from [certs] scalar fields + [certs.intermediate] scalar fields
+#
+# Required tokens:
+#   {{ KEY_BITS }}      — from [certs] key_bits
+#   {{ COMMON_NAME }}   — from [certs.intermediate] common_name
+#   {{ ORGANIZATION }}  — from [certs] organization
+#   {{ COUNTRY }}       — from [certs] country
+# ==============================================================================
+
+[ req ]
+default_bits       = {{ KEY_BITS }}
+default_md         = sha256
+prompt             = no
+x509_extensions    = v3_intermediate_ca
+distinguished_name = dn
+
+[ dn ]
+CN = {{ COMMON_NAME }}
+O  = {{ ORGANIZATION }}
+C  = {{ COUNTRY }}
+
+[ v3_intermediate_ca ]
+basicConstraints       = critical, CA:TRUE, pathlen:0
+keyUsage               = critical, keyCertSign, cRLSign
+subjectKeyIdentifier   = hash
+authorityKeyIdentifier = keyid:always, issuer

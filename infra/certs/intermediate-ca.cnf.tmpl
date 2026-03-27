@@ -1,0 +1,39 @@
+# ==============================================================================
+# Intermediate CA config template
+# Tokens resolved from [certs] scalar fields + [certs.intermediate] scalar fields
+#
+# Required tokens:
+#   {{ KEY_BITS }}      — from [certs] key_bits
+#   {{ COMMON_NAME }}   — from [certs.intermediate] common_name
+#   {{ ORGANIZATION }}  — from [certs] organization
+#   {{ COUNTRY }}       — from [certs] country
+#
+# Two extension sections:
+#   v3_intermediate_ca_req — embedded in CSR (no authorityKeyIdentifier)
+#   v3_intermediate_ca     — applied when signing (-extfile -extensions)
+# ==============================================================================
+
+[ req ]
+default_bits       = {{ KEY_BITS }}
+default_md         = sha256
+prompt             = no
+req_extensions     = v3_intermediate_ca_req
+distinguished_name = dn
+
+[ dn ]
+CN = {{ COMMON_NAME }}
+O  = {{ ORGANIZATION }}
+C  = {{ COUNTRY }}
+
+# CSR extensions — no authorityKeyIdentifier (no issuer available during CSR generation)
+[ v3_intermediate_ca_req ]
+basicConstraints       = critical, CA:TRUE, pathlen:0
+keyUsage               = critical, keyCertSign, cRLSign
+subjectKeyIdentifier   = hash
+
+# Signing extensions — applied by -extfile -extensions when CA signs the CSR
+[ v3_intermediate_ca ]
+basicConstraints       = critical, CA:TRUE, pathlen:0
+keyUsage               = critical, keyCertSign, cRLSign
+subjectKeyIdentifier   = hash
+authorityKeyIdentifier = keyid,issuer

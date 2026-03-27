@@ -1,0 +1,31 @@
+# Schema for [providers.certs] config
+
+[fields.tool]
+type = "string"
+required = false
+default = "openssl"
+enum = ["openssl"]
+
+[fields.key_bits]
+type = "int"
+required = false
+default = 4096
+enum = [2048, 4096]
+
+[fields.organization]
+type = "string"
+required = false
+default = ""
+
+[fields.country]
+type = "string"
+required = false
+default = ""
+
+[fields.root]
+type = "record"
+required = false
+
+[fields.intermediate]
+type = "record"
+required = false

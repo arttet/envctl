@@ -1,0 +1,13 @@
+# compose provider health checks
+
+[[checks]]
+name = "docker_available"
+type = "tool"
+tool = "docker"
+severity = "warn"
+
+[[checks]]
+name = "compose_available"
+type = "tool"
+tool = "docker"
+severity = "warn"
