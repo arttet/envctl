@@ -10,6 +10,7 @@ use ../../../plugins/providers/git.nu
 use ../../../plugins/providers/password.nu
 use ../../../plugins/providers/compose.nu
 use ../../../plugins/providers/certs.nu
+use ../../../plugins/providers/rsa.nu
 
 use ../../language/keywords.nu [KEYWORD_MANIFEST]
 
@@ -21,6 +22,7 @@ def builtin-providers [] {
         password: {|| password manifest }
         compose: {|| compose manifest }
         certs: {|| certs manifest }
+        rsa: {|| rsa manifest }
     }
 }
 

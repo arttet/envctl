@@ -173,6 +173,103 @@ envctl envfile generate   # renders .env with the path value
 
 ---
 
+### `rsa`
+
+Generates RSA private keys in PKCS1 or PKCS8 PEM format. Use this for JWT signing keys and any other use case that requires a PEM-encoded RSA key rather than a random string.
+
+**Provides**
+
+| Token | Returns |
+|---|---|
+| <span v-pre>`{{ provider:rsa.generate-rsa-key }}`</span> | PEM-encoded RSA private key (PKCS1 or PKCS8) |
+
+**Enable**
+
+```toml
+[providers]
+enabled = ["rsa"]
+```
+
+**Configuration (`[providers.rsa]`)**
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `key_bits` | int | `2048` | RSA key size: `2048`, `3072`, or `4096` |
+| `format` | string | `"pkcs1"` | Output format: `pkcs1` (`openssl genrsa`) or `pkcs8` (converted via `openssl pkcs8 -topk8 -nocrypt`) |
+
+```toml
+[providers.rsa]
+key_bits = 2048
+format   = "pkcs1"
+```
+
+**Per-secret overrides**
+
+`key_bits` and `format` can be set directly on any secret entry to override the global `[providers.rsa]` config for that secret only.
+
+```toml
+[providers.rsa]
+key_bits = 2048
+format   = "pkcs1"   # default for all RSA secrets
+
+[secrets.JWT_PRIVATE_KEY_FILE]
+value_source = "{{ provider:rsa.generate-rsa-key }}"
+targets      = ["file"]
+# uses global config: key_bits=2048, format=pkcs1
+
+[secrets.SERVICE_B_JWT_KEY_FILE]
+value_source = "{{ provider:rsa.generate-rsa-key }}"
+targets      = ["file"]
+key_bits     = 4096    # overrides global key_bits for this secret only
+format       = "pkcs8" # overrides global format for this secret only
+```
+
+**Usage — generating a JWT signing key**
+
+```toml
+# .envctl.toml
+[providers]
+enabled = ["git", "rsa"]
+
+[generators]
+GIT_ROOT_DIR         = "{{ provider:git.top-level-dir }}"
+PROJECT_SECRETS_DIR  = "{{ GIT_ROOT_DIR }}/secrets"
+
+[providers.rsa]
+key_bits = 2048
+format   = "pkcs1"
+
+[secrets.JWT_PRIVATE_KEY_FILE]
+value_source = "{{ provider:rsa.generate-rsa-key }}"
+targets      = ["file"]
+
+[secrets.JWT_PRIVATE_KEY_FILE.options.file]
+path = "{{ PROJECT_SECRETS_DIR }}/jwt_private_key"
+```
+
+```bash
+# .env.example
+JWT_PRIVATE_KEY_FILE={{ PROJECT_SECRETS_DIR }}/jwt_private_key
+```
+
+```nushell
+envctl secrets generate   # writes the PEM key to disk
+envctl envfile generate   # renders .env with the path value
+```
+
+::: info
+`pkcs1` produces a `-----BEGIN RSA PRIVATE KEY-----` PEM block.
+`pkcs8` produces a `-----BEGIN PRIVATE KEY-----` PEM block (unencrypted).
+Both formats are accepted by most JWT libraries (e.g. `golang-jwt/jwt`, `jsonwebtoken`, `PyJWT`).
+:::
+
+::: warning
+RSA key generation is CPU-bound. `key_bits = 4096` may take a few seconds on older hardware.
+`key_bits = 2048` is sufficient for HS256/RS256 JWT use cases and generates significantly faster.
+:::
+
+---
+
 ### `compose`
 
 Builds the `COMPOSE_FILE` and `COMPOSE_PATH_SEPARATOR` values for Docker Compose by discovering relevant Compose files on disk based on the active stage and selected services.

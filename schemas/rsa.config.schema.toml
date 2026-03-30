@@ -1,0 +1,14 @@
+# rsa provider config schema
+
+[meta]
+version = "v1"
+
+[fields.key_bits]
+type = "int"
+default = 2048
+enum = [2048, 3072, 4096]
+
+[fields.format]
+type = "string"
+enum = ["pkcs1", "pkcs8"]
+default = "pkcs1"

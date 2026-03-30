@@ -123,13 +123,17 @@ export def build-secret-nodes [cfg: record] {
         let value_src  = ($spec | get --optional value_source | default "" | into string)
         let src_tokens = (parse-tokens $value_src)
 
-        let pw_length  = ($spec | get --optional length)
-        let pw_charset = ($spec | get --optional charset)
-        let pw_tool    = ($spec | get --optional tool)
+        let pw_length   = ($spec | get --optional length)
+        let pw_charset  = ($spec | get --optional charset)
+        let pw_tool     = ($spec | get --optional tool)
+        let rsa_bits    = ($spec | get --optional key_bits)
+        let rsa_format  = ($spec | get --optional format)
         mut provider_options = {}
-        if $pw_length  != null { $provider_options = ($provider_options | insert length  $pw_length) }
-        if $pw_charset != null { $provider_options = ($provider_options | insert charset $pw_charset) }
-        if $pw_tool    != null { $provider_options = ($provider_options | insert tool    $pw_tool) }
+        if $pw_length  != null { $provider_options = ($provider_options | insert length   $pw_length) }
+        if $pw_charset != null { $provider_options = ($provider_options | insert charset  $pw_charset) }
+        if $pw_tool    != null { $provider_options = ($provider_options | insert tool     $pw_tool) }
+        if $rsa_bits   != null { $provider_options = ($provider_options | insert key_bits $rsa_bits) }
+        if $rsa_format != null { $provider_options = ($provider_options | insert format   $rsa_format) }
 
         {
             kind:             secret
