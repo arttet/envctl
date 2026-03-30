@@ -8,7 +8,7 @@
 
 use std assert
 
-use ../../src/engine/parser.nu [build-certs-vars]
+use ../../src/engine/parser.nu [build-certs-vars build-secret-nodes]
 
 # ---------------------------------------------------------------------------
 # build-certs-vars — scalar [certs] fields become substitution variables
@@ -70,6 +70,70 @@ def test_certs_vars_no_certs_section [] {
 }
 
 # ---------------------------------------------------------------------------
+# build-secret-nodes — provider_options per-secret overrides
+# ---------------------------------------------------------------------------
+
+def test_secret_nodes_no_overrides [] {
+    let nodes = (build-secret-nodes {
+        secrets: {
+            base_dir: "."
+            MY_SECRET: { value_source: "{{ provider:password.generate-password }}", targets: ["file"] }
+        }
+    })
+    assert equal ($nodes | length) 1
+    assert equal ($nodes | first | get --optional provider_options | default {}) {}
+}
+
+def test_secret_nodes_length_override [] {
+    let nodes = (build-secret-nodes {
+        secrets: {
+            base_dir: "."
+            JWT_KEY: { value_source: "{{ provider:password.generate-password }}", targets: ["file"], length: 128 }
+        }
+    })
+    let po = ($nodes | first | get --optional provider_options | default {})
+    assert equal ($po | get --optional length | default 0) 128
+    assert equal ($po | columns | length) 1
+}
+
+def test_secret_nodes_charset_override [] {
+    let nodes = (build-secret-nodes {
+        secrets: {
+            base_dir: "."
+            API_KEY: { value_source: "{{ provider:password.generate-password }}", targets: ["file"], charset: "hex" }
+        }
+    })
+    let po = ($nodes | first | get --optional provider_options | default {})
+    assert equal ($po | get --optional charset | default "") "hex"
+    assert equal ($po | columns | length) 1
+}
+
+def test_secret_nodes_all_overrides [] {
+    let nodes = (build-secret-nodes {
+        secrets: {
+            base_dir: "."
+            PRIV_KEY: {
+                value_source: "{{ provider:password.generate-password }}"
+                targets: ["file"]
+                length: 512
+                charset: "hex"
+                tool: "openssl"
+            }
+        }
+    })
+    let po = ($nodes | first | get --optional provider_options | default {})
+    assert equal ($po | get --optional length  | default 0)  512
+    assert equal ($po | get --optional charset | default "") "hex"
+    assert equal ($po | get --optional tool    | default "") "openssl"
+    assert equal ($po | columns | length) 3
+}
+
+def test_secret_nodes_no_secrets [] {
+    let nodes = (build-secret-nodes { secrets: { base_dir: "." } })
+    assert equal ($nodes | length) 0
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -80,13 +144,18 @@ def main [] {
 
     let tests = [
         [name fn];
-        [test_certs_vars_empty           { test_certs_vars_empty }]
-        [test_certs_vars_scalar_string   { test_certs_vars_scalar_string }]
-        [test_certs_vars_scalar_int      { test_certs_vars_scalar_int }]
-        [test_certs_vars_upcases_keys    { test_certs_vars_upcases_keys }]
-        [test_certs_vars_skips_record_fields { test_certs_vars_skips_record_fields }]
-        [test_certs_vars_multiple_scalars { test_certs_vars_multiple_scalars }]
-        [test_certs_vars_no_certs_section { test_certs_vars_no_certs_section }]
+        [test_certs_vars_empty                { test_certs_vars_empty }]
+        [test_certs_vars_scalar_string        { test_certs_vars_scalar_string }]
+        [test_certs_vars_scalar_int           { test_certs_vars_scalar_int }]
+        [test_certs_vars_upcases_keys         { test_certs_vars_upcases_keys }]
+        [test_certs_vars_skips_record_fields  { test_certs_vars_skips_record_fields }]
+        [test_certs_vars_multiple_scalars     { test_certs_vars_multiple_scalars }]
+        [test_certs_vars_no_certs_section     { test_certs_vars_no_certs_section }]
+        [test_secret_nodes_no_overrides       { test_secret_nodes_no_overrides }]
+        [test_secret_nodes_length_override    { test_secret_nodes_length_override }]
+        [test_secret_nodes_charset_override   { test_secret_nodes_charset_override }]
+        [test_secret_nodes_all_overrides      { test_secret_nodes_all_overrides }]
+        [test_secret_nodes_no_secrets         { test_secret_nodes_no_secrets }]
     ]
 
     for row in $tests {
