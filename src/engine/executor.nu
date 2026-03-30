@@ -97,41 +97,60 @@ def apply-write-env [action: record, plan: record, ctx: record] {
 }
 
 def render-env [content: string, ctx: record, ...excluded: string] {
-    # Use reduce so each resolved value is available to subsequent lines.
-    # e.g. SECRETS_DIR=/run/secrets followed by FILE={{SECRETS_DIR}}/pass resolves correctly.
-    let acc = (
-        $content | lines | reduce --fold {
-            lines: []
-            env_vars: ($ctx | get --optional env_vars | default {})
-        } { |line, acc|
-            let trimmed = ($line | str trim)
+    let lines      = ($content | lines)
+    let base_vars  = ($ctx | get --optional env_vars | default {})
 
+    # Phase 1 — multi-pass resolution to handle forward references.
+    # Each pass feeds newly resolved values back into env_vars so that a variable
+    # defined later in the file can satisfy a token that appeared earlier.
+    # Mirrors resolve-generators in plan.nu — runs until stable or 10 passes.
+    mut env_vars = $base_vars
+    mut passes   = 0
+
+    loop {
+        if $passes >= 10 { break }
+        let prev = $env_vars
+
+        $env_vars = ($lines | reduce --fold $env_vars {|line, acc|
+            let trimmed = ($line | str trim)
             if ($trimmed | is-empty) or ($trimmed | str starts-with "#") {
-                {
-                    lines: ($acc.lines | append $line), env_vars: $acc.env_vars
-                }
+                $acc
             } else {
                 let parts = ($line | split row "=" | collect)
                 let key   = ($parts | first | str trim)
                 let val   = ($parts | skip 1 | str join "=")
-
                 if ($key | is-empty) or ($key in $excluded) {
-                    {
-                        lines: ($acc.lines | append $line), env_vars: $acc.env_vars
-                    }
+                    $acc
                 } else {
-                    let run_ctx  = ($ctx | upsert env_vars $acc.env_vars)
-                    let resolved = try { resolve $val $run_ctx } catch { $val }
-
-                    {
-                        lines:    ($acc.lines | append $"($key)=($resolved)")
-                        env_vars: ($acc.env_vars | upsert $key $resolved)
-                    }
+                    let resolved = try { resolve $val ($ctx | upsert env_vars $acc) } catch { $val }
+                    $acc | upsert $key $resolved
                 }
             }
+        })
+
+        if $env_vars == $prev { break }
+        $passes += 1
+    }
+
+    # Phase 2 — render output lines in original order using the fully resolved env_vars.
+    # Assign to immutable binding — Nushell disallows capturing mut vars in closures.
+    let resolved_vars = $env_vars
+    $lines | each {|line|
+        let trimmed = ($line | str trim)
+        if ($trimmed | is-empty) or ($trimmed | str starts-with "#") {
+            $line
+        } else {
+            let parts = ($line | split row "=" | collect)
+            let key   = ($parts | first | str trim)
+            let val   = ($parts | skip 1 | str join "=")
+            if ($key | is-empty) or ($key in $excluded) {
+                $line
+            } else {
+                let resolved = try { resolve $val ($ctx | upsert env_vars $resolved_vars) } catch { $val }
+                $"($key)=($resolved)"
+            }
         }
-    )
-    $acc.lines | str join "\n"
+    } | str join "\n"
 }
 
 def apply-write-secret [action: record, ctx: record] {
