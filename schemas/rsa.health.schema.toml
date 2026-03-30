@@ -1,0 +1,22 @@
+# rsa provider health checks
+# Evaluated by schema.run-health-checks — generic engine, no custom handlers.
+
+[[checks]]
+name = "openssl_available"
+type = "tool"
+tool = "openssl"
+severity = "error"
+
+[[checks]]
+name = "rsa_key_bits_valid"
+type = "config"
+path = "providers.rsa.key_bits"
+enum = [2048, 3072, 4096]
+severity = "warn"
+
+[[checks]]
+name = "rsa_format_valid"
+type = "config"
+path = "providers.rsa.format"
+enum = ["pkcs1", "pkcs8"]
+severity = "warn"

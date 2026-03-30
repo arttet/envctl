@@ -10,6 +10,7 @@ use std assert
 
 use ../../plugins/providers/git.nu
 use ../../plugins/providers/password.nu
+use ../../plugins/providers/rsa.nu
 
 # ---------------------------------------------------------------------------
 # git provider
@@ -70,6 +71,37 @@ def test_password_has_resolve_fn [] {
 }
 
 # ---------------------------------------------------------------------------
+# rsa provider
+# ---------------------------------------------------------------------------
+
+def test_rsa_manifest_exists [] {
+    let m = (rsa manifest)
+    assert equal $m.name rsa
+    assert ("generate-rsa-key" in $m.provides)
+}
+
+def test_rsa_manifest_version [] {
+    let m = (rsa manifest)
+    assert equal $m.version 1.0.0
+}
+
+def test_rsa_manifest_config_schema [] {
+    let m = (rsa manifest)
+    assert equal $m.config_schema rsa.config.schema.toml
+}
+
+def test_rsa_manifest_health_schema [] {
+    let m = (rsa manifest)
+    assert equal $m.health_schema rsa.health.schema.toml
+}
+
+def test_rsa_has_resolve_fn [] {
+    let m = (rsa manifest)
+    assert ($m has resolve)
+    assert ($m.resolve has generate-rsa-key)
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -89,6 +121,11 @@ def main [] {
         [test_password_manifest_health_schema  { test_password_manifest_health_schema }]
         [test_password_manifest_env_vars       { test_password_manifest_env_vars }]
         [test_password_has_resolve_fn          { test_password_has_resolve_fn }]
+        [test_rsa_manifest_exists              { test_rsa_manifest_exists }]
+        [test_rsa_manifest_version             { test_rsa_manifest_version }]
+        [test_rsa_manifest_config_schema       { test_rsa_manifest_config_schema }]
+        [test_rsa_manifest_health_schema       { test_rsa_manifest_health_schema }]
+        [test_rsa_has_resolve_fn               { test_rsa_has_resolve_fn }]
     ]
 
     for row in $tests {
