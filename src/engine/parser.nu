@@ -109,7 +109,11 @@ def build-generator-nodes [cfg: record] {
 
 # Build secret AST nodes from [secrets.NAME] sections.
 # Filters out service keys (base_dir, excluded).
-def build-secret-nodes [cfg: record] {
+# provider_options captures per-secret overrides (length, charset, tool) that shadow
+# the global [providers.NAME] config when the secret is resolved.
+@example "Build secret nodes from empty cfg" { build-secret-nodes { secrets: { base_dir: "." } } }
+@example "Build secret nodes with provider overrides" { build-secret-nodes { secrets: { base_dir: ".", MY_SECRET: { value_source: "{{ provider:password.generate-password }}", targets: ["file"], length: 64, charset: "hex" } } } }
+export def build-secret-nodes [cfg: record] {
     let secrets_cfg = ($cfg | get --optional secrets | default {})
     let svc_keys = (secrets-service-keys)
     let keys = ($secrets_cfg | columns | where $it not-in $svc_keys)
@@ -118,14 +122,24 @@ def build-secret-nodes [cfg: record] {
         let spec       = ($secrets_cfg | get --optional $key)
         let value_src  = ($spec | get --optional value_source | default "" | into string)
         let src_tokens = (parse-tokens $value_src)
+
+        let pw_length  = ($spec | get --optional length)
+        let pw_charset = ($spec | get --optional charset)
+        let pw_tool    = ($spec | get --optional tool)
+        mut provider_options = {}
+        if $pw_length  != null { $provider_options = ($provider_options | insert length  $pw_length) }
+        if $pw_charset != null { $provider_options = ($provider_options | insert charset $pw_charset) }
+        if $pw_tool    != null { $provider_options = ($provider_options | insert tool    $pw_tool) }
+
         {
-            kind:         secret
-            key:          $key
-            value_source: $value_src
-            src_tokens:   $src_tokens
-            targets:      ($spec | get --optional targets | default [file])
-            options:      ($spec | get --optional options | default {})
-            errors:       []
+            kind:             secret
+            key:              $key
+            value_source:     $value_src
+            src_tokens:       $src_tokens
+            targets:          ($spec | get --optional targets | default [file])
+            options:          ($spec | get --optional options | default {})
+            provider_options: $provider_options
+            errors:           []
         }
     }
 }
