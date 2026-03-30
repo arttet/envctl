@@ -72,6 +72,91 @@ def test_generate_all_dependency_order [] {
     }
 }
 
+def test_envfile_forward_reference [] {
+    let old_pwd = $env.PWD
+    let envctl_path = ($env.PWD | path join envctl.nu)
+    let tmp = (mktemp --directory)
+
+    try {
+        cd $tmp
+
+        (
+            "[envfile]\n"
+            + "file = \".env\"\n"
+            + "pattern = \".env.example\"\n\n"
+            + "[secrets]\n"
+            + "base_dir = \".\"\n\n"
+            + "[providers]\n"
+            + "enabled = []\n"
+        ) | save ".envctl.toml"
+
+        # GOOSE_HOST references PROXYSQL_HOST which is defined *later* in the file
+        (
+            "GOOSE_HOST={{ PROXYSQL_HOST }}\n"
+            + "GOOSE_PORT={{ PROXYSQL_PORT }}\n"
+            + "\n"
+            + "PROXYSQL_HOST=proxysql\n"
+            + "PROXYSQL_PORT=6033\n"
+        ) | save ".env.example"
+
+        run-envctl $envctl_path envctl envfile generate
+
+        assert (".env" | path exists)
+        let content = (open --raw ".env")
+        assert ($content =~ "GOOSE_HOST=proxysql")
+        assert ($content =~ "GOOSE_PORT=6033")
+
+        cd $old_pwd
+        rm --recursive $tmp
+    } catch {|err|
+        cd $old_pwd
+        rm --recursive $tmp
+        error make {msg: $err.msg}
+    }
+}
+
+def test_envfile_chain_resolution [] {
+    let old_pwd = $env.PWD
+    let envctl_path = ($env.PWD | path join envctl.nu)
+    let tmp = (mktemp --directory)
+
+    try {
+        cd $tmp
+
+        (
+            "[envfile]\n"
+            + "file = \".env\"\n"
+            + "pattern = \".env.example\"\n\n"
+            + "[secrets]\n"
+            + "base_dir = \".\"\n\n"
+            + "[providers]\n"
+            + "enabled = []\n"
+        ) | save ".envctl.toml"
+
+        # A → B → C, all defined out of order
+        (
+            "A={{ B }}\n"
+            + "B={{ C }}\n"
+            + "C=value\n"
+        ) | save ".env.example"
+
+        run-envctl $envctl_path envctl envfile generate
+
+        assert (".env" | path exists)
+        let content = (open --raw ".env")
+        assert ($content =~ "A=value")
+        assert ($content =~ "B=value")
+        assert ($content =~ "C=value")
+
+        cd $old_pwd
+        rm --recursive $tmp
+    } catch {|err|
+        cd $old_pwd
+        rm --recursive $tmp
+        error make {msg: $err.msg}
+    }
+}
+
 def main [] {
     print generate_test.nu
     mut passed = 0
@@ -80,6 +165,8 @@ def main [] {
     let tests = [
         [name fn];
         [test_generate_all_dependency_order { test_generate_all_dependency_order }]
+        [test_envfile_forward_reference      { test_envfile_forward_reference }]
+        [test_envfile_chain_resolution       { test_envfile_chain_resolution }]
     ]
 
     for row in $tests {
