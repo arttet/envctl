@@ -27,4 +27,4 @@ export const SCHEMAS_DIR = "schemas"
 # Maximum passes for generator resolution loop — prevents infinite cycles
 export const MAX_GENERATOR_PASSES = 10
 # Current envctl version — single source of truth
-export const ENVCTL_VERSION = "1.1.3"
+export const ENVCTL_VERSION = "1.1.0"
