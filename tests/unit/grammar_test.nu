@@ -109,6 +109,28 @@ def test_resolve_unresolved_errors [] {
     assert $failed
 }
 
+def test_resolve_secret_from_secrets_paths [] {
+    let tmp_dir = (mktemp -d)
+    let secret_file = ($tmp_dir | path join "secret")
+    "s3cr3t" | save --force $secret_file
+    let ctx = {
+        env_vars: {}
+        secrets_root: .
+        providers: {}
+        secrets_paths: { MY_PASS_FILE: $secret_file }
+    }
+    let result = (resolve "prefix:{{ secret:MY_PASS_FILE }}:suffix" $ctx)
+    rm --recursive --force $tmp_dir
+    assert equal $result "prefix:s3cr3t:suffix"
+}
+
+def test_resolve_secret_not_in_plan_errors [] {
+    # IDENT not in secrets_paths and not in env_vars → error
+    let ctx = {env_vars: {}, secrets_root: ., providers: {}, secrets_paths: {}}
+    let failed = (try { resolve "{{ secret:MISSING_FILE }}" $ctx; false } catch { true })
+    assert $failed
+}
+
 # ---------------------------------------------------------------------------
 # has-unresolved
 # ---------------------------------------------------------------------------
@@ -175,7 +197,9 @@ def main [] {
         [test_resolve_no_tokens          { assert equal (resolve "plain string" { env_vars: {}, secrets_root: ".", providers: {} }) "plain string" }]
         [test_resolve_var                { test_resolve_var }]
         [test_resolve_multiple_vars      { test_resolve_multiple_vars }]
-        [test_resolve_unresolved_errors  { test_resolve_unresolved_errors }]
+        [test_resolve_unresolved_errors           { test_resolve_unresolved_errors }]
+        [test_resolve_secret_from_secrets_paths   { test_resolve_secret_from_secrets_paths }]
+        [test_resolve_secret_not_in_plan_errors   { test_resolve_secret_not_in_plan_errors }]
         [test_has_unresolved_true        { assert (has-unresolved "hello {{ WORLD }}") }]
         [test_has_unresolved_false       { assert not (has-unresolved "hello world") }]
         [test_has_unresolved_empty       { assert not (has-unresolved "") }]

@@ -155,7 +155,7 @@ def build-secrets-actions [sub_ast: record, resolved_generators: record, ctx: re
     let secret_nodes = (queries secrets $sub_ast)
     if ($secret_nodes | is-empty) { return [] }
     let secrets_root = (queries secrets-root $sub_ast)
-    $secret_nodes | each {|s|
+    let actions = ($secret_nodes | each {|s|
         let targets = ($s | get --optional targets | default ["file"])
 
         $targets | each {|target|
@@ -165,18 +165,58 @@ def build-secrets-actions [sub_ast: record, resolved_generators: record, ctx: re
             let resolved_path = (resolve-option-token $raw_path $resolved_generators $ctx $secrets_root)
 
             {
-                kind:         "write-secret"
-                key:          $s.key
-                value_source: $s.value_source
-                src_tokens:   $s.src_tokens
-                mode:         "create-only"
-                backup:       false
-                backend:      $target
-                options:      ($opts | upsert path $resolved_path)
-                secrets_root: $secrets_root
+                kind:             "write-secret"
+                key:              $s.key
+                value_source:     $s.value_source
+                src_tokens:       $s.src_tokens
+                mode:             "create-only"
+                backup:           false
+                backend:          $target
+                options:          ($opts | upsert path $resolved_path)
+                secrets_root:     $secrets_root
+                provider_options: ($s | get --optional provider_options | default {})
             }
         }
-    } | flatten
+    } | flatten)
+
+    topo-sort-secrets $actions
+}
+
+# Sort write-secret actions so {{ secret:IDENT }} dependencies execute first.
+# Uses iterative stabilization — safe for DAGs, appends any cycle remainder unchanged.
+def topo-sort-secrets [actions: list<record>] {
+    let all_keys = ($actions | get key)
+    mut remaining = $actions
+    mut sorted = []
+    mut passes = 0
+    let max_passes = (($actions | length) + 1)
+
+    while (not ($remaining | is-empty)) and ($passes < $max_passes) {
+        let resolved_keys = (if ($sorted | is-empty) { [] } else { $sorted | get key })
+        mut next_remaining = []
+
+        for action in $remaining {
+            let src_tokens = ($action | get --optional src_tokens | default [])
+            let secret_deps = (
+                $src_tokens
+                | where type == secret
+                | get ident
+                | where {|k| $k in $all_keys}
+            )
+            let unmet = ($secret_deps | where {|d| $d not-in $resolved_keys})
+
+            if ($unmet | is-empty) {
+                $sorted = ($sorted | append $action)
+            } else {
+                $next_remaining = ($next_remaining | append $action)
+            }
+        }
+
+        $remaining = $next_remaining
+        $passes += 1
+    }
+
+    $sorted | append $remaining
 }
 
 def build-cert-actions [sub_ast: record, resolved_generators: record, ctx: record] {
