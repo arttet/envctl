@@ -5,7 +5,7 @@ A Nushell-native configuration compiler and execution engine for environment and
 ## What it does
 
 - Generates `.env` from declarative templates with `{{ token }}` substitution
-- Manages secrets — generates, rotates, and delivers them to file or other backends
+- Manages secrets: generates, rotates, and delivers them to file or other backends
 - Manages PKI certificate chains (Root CA → Intermediate → Leaf) via openssl
 - Validates all config against TOML schemas before writing anything
 - Tracks versions in `.envctl.lock` (commit this) and an audit log in `.envctl/state.ndjson` (gitignore the `.envctl/` directory)
@@ -47,6 +47,12 @@ nu install.nu --uninstall         # remove files and autoload hook
 
 ```nushell
 envctl init
+```
+
+### First-time setup: generate everything at once
+
+```nushell
+envctl generate
 ```
 
 ### Generate .env from .env.example
@@ -166,7 +172,6 @@ envctl plugins list
 ## Development
 
 ```nushell
-just deps    # Install nufmt + nu-lint
 just fmt     # Format code
 just lint    # Run linter
 just test    # Run tests
