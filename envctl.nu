@@ -1,7 +1,7 @@
 #!/usr/bin/env nu
 
 use ./src/core/log.nu
-use ./src/core/constants.nu [DEFAULT_CONFIG_PATH DEFAULT_STAGE]
+use ./src/core/constants.nu [DEFAULT_CONFIG_PATH DEFAULT_STAGE ENVCTL_VERSION]
 
 export use ./src/commands/init.nu [
     "envctl init"
@@ -45,6 +45,10 @@ export-env {
         ENVCTL_DRY_RUN: ($env.ENVCTL_DRY_RUN? | default "false")
         ENVCTL_QUIET: ($env.ENVCTL_QUIET?   | default "false")
     }
+}
+
+export def "envctl version" []: nothing -> string {
+    $ENVCTL_VERSION
 }
 
 export def envctl []: nothing -> nothing {
