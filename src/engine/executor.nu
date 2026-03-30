@@ -30,7 +30,20 @@ export def apply [plan: record, ctx: record] {
 
     # completed_certs accumulates PEM strings as certs are read or generated
     # { name → { cert: string, key: string } }
-    mut ctx_mut = ($ctx | upsert completed_certs {})
+    # secrets_paths maps secret key → resolved host file path for {{ secret:IDENT }} resolution
+    let secrets_paths = (
+        $plan.actions
+        | where kind == "write-secret"
+        | reduce --fold {} {|a, acc|
+            let path = ($a.options | get --optional path | default "")
+            if ($path | is-not-empty) {
+                $acc | insert $a.key $path
+            } else {
+                $acc
+            }
+        }
+    )
+    mut ctx_mut = ($ctx | upsert completed_certs {} | upsert secrets_paths $secrets_paths)
     for action in $plan.actions {
         match $action.kind {
             "write-env" => {
@@ -69,6 +82,8 @@ def apply-write-env [action: record, plan: record, ctx: record] {
         providers: ($ctx | get --optional providers | default {})
         cfg: ($ctx | get --optional cfg | default {})
         cli: ($ctx | get --optional cli | default {})
+        stage: ($ctx | get --optional stage | default "dev")
+        secrets_paths: ($ctx | get --optional secrets_paths | default {})
     }
 
     let rendered = (render-env $template_content $resolve_ctx ...$action.excluded)
@@ -143,12 +158,36 @@ def apply-write-secret [action: record, ctx: record] {
 }
 
 def resolve-secret-value [action: record, ctx: record] {
+    let provider_overrides = ($action | get --optional provider_options | default {})
+
+    # Merge per-secret provider_options into ctx.cfg.providers.{name}, shadowing global config.
+    # Provider name is read from src_tokens (type == "provider").
+    let merged_cfg = if ($provider_overrides | is-empty) {
+        ($ctx | get --optional cfg | default {})
+    } else {
+        let src_tokens  = ($action | get --optional src_tokens | default [])
+        let prov_tokens = ($src_tokens | where type == provider)
+        let prov_name   = if ($prov_tokens | is-empty) {
+            ""
+        } else {
+            $prov_tokens | first | get --optional name | default ""
+        }
+
+        let base_cfg_raw     = ($ctx          | get --optional cfg       | default {})
+        let base_prov_cfg    = ($base_cfg_raw  | get --optional providers | default {})
+        let base_named_cfg   = ($base_prov_cfg | get --optional $prov_name | default {})
+        let merged_named_cfg = ($base_named_cfg | merge $provider_overrides)
+        let merged_prov_cfg  = ($base_prov_cfg  | upsert $prov_name $merged_named_cfg)
+        $base_cfg_raw | upsert providers $merged_prov_cfg
+    }
+
     let resolve_ctx = {
-        env_vars: ($ctx | get --optional env_vars | default {})
-        secrets_root: ($ctx | get --optional secrets_root | default .)
-        providers: ($ctx | get --optional providers | default {})
-        cfg: ($ctx | get --optional cfg | default {})
-        cli: ($ctx | get --optional cli | default {})
+        env_vars:      ($ctx | get --optional env_vars      | default {})
+        secrets_root:  ($ctx | get --optional secrets_root  | default .)
+        providers:     ($ctx | get --optional providers     | default {})
+        cfg:           $merged_cfg
+        cli:           ($ctx | get --optional cli           | default {})
+        secrets_paths: ($ctx | get --optional secrets_paths | default {})
     }
 
     try {

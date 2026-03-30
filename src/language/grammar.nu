@@ -142,14 +142,23 @@ export def resolve-token [token: record, ctx: record] {
             $val
         }
         "secret" => {
-            let file_path_raw = ($env_vars | get --optional $token.ident | default "")
-            if ($file_path_raw | is-empty) {
-                error make {
-                    msg: $"[grammar] '{{ secret:($token.ident) }}' — env var '($token.ident)' not set"
+            let secrets_paths = ($ctx | get --optional secrets_paths | default {})
+
+            # Resolve file path: prefer secrets_paths (cross-secret reference by key),
+            # fall back to env_vars[IDENT] as a file path (Docker _FILE pattern).
+            let from_plan = ($secrets_paths | get --optional $token.ident | default "")
+            let file_path = if ($from_plan | is-not-empty) {
+                $from_plan | path expand
+            } else {
+                let file_path_raw = ($env_vars | get --optional $token.ident | default "")
+                if ($file_path_raw | is-empty) {
+                    error make {
+                        msg: $"[grammar] '{{ secret:($token.ident) }}' — not in secrets plan and env var '($token.ident)' not set"
+                    }
                 }
+                $secrets_root | path join ($file_path_raw | str trim --left --char /)
             }
 
-            let file_path = ($secrets_root | path join ($file_path_raw | str trim --left --char /))
             if not ($file_path | path exists) {
                 error make {
                     msg: $"[grammar] '{{ secret:($token.ident) }}' — file not found: ($file_path)"
