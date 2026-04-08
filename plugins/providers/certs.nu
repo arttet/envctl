@@ -85,6 +85,7 @@ def generate-self-signed [ctx: record, action: record]: nothing -> record {
             -days   ($days | into string)
             -nodes
             -config $cnf_path
+            -quiet
         ]
         print $"[certs] ($cmd | str join ' ')"
         ^($cmd | first) ...($cmd | skip 1)
@@ -144,6 +145,7 @@ def generate-signed [ctx: record, action: record, signed_by: string]: nothing ->
             -out    $tmp_csr
             -nodes
             -config $cnf_path
+            -quiet
         ]
         print $"[certs] ($cmd_req | str join ' ')"
         ^($cmd_req | first) ...($cmd_req | skip 1)
