@@ -152,6 +152,14 @@ def log-skipped [ctx: record, path: string, reason: string] {
     compose-log $ctx $"  - ($path) \(($reason)\)"
 }
 
+def normalize-variant-list [val: any]: nothing -> list<string> {
+    if ($val | describe | str starts-with "list") {
+        $val | each {|v| $v | str trim} | where {|v| ($v | is-not-empty)}
+    } else {
+        $val | into string | split row "," | each {|v| $v | str trim} | where {|v| ($v | is-not-empty)}
+    }
+}
+
 def build-file-list [
     selected:   list<string>
     variants:   record
@@ -185,30 +193,34 @@ def build-file-list [
         let svc_dir = ($base_dir | path join $name | to-forward-slashes)
 
         for dep in ($svc_cfg | columns | where $it != "default") {
-            let override = ($variants | get --optional $"($name).($dep)" | default "")
-            let variant  = if ($override | is-not-empty) {
+            let override     = ($variants | get --optional $"($name).($dep)" | default "")
+            let raw_val      = if ($override | is-not-empty) {
                 $override
             } else {
                 $svc_cfg | get --optional $dep | default ""
             }
-            let reason = if ($override | is-not-empty) {
-                $"($name).($dep)=($variant) via ENVCTL_VARIANTS"
-            } else {
-                $"($name).($dep)=($variant) default"
-            }
+            let dep_variants = (normalize-variant-list $raw_val)
 
-            let vf = ($svc_dir | path join $"compose.($name).($dep).($variant).yml" | to-forward-slashes)
-            if ($vf | path exists) {
-                $files = ($files | append $vf)
-                log-included $ctx $vf $reason
-            } else {
-                log-skipped $ctx $vf $reason
-            }
+            for variant in $dep_variants {
+                let reason = if ($override | is-not-empty) {
+                    $"($name).($dep)=($variant) via ENVCTL_VARIANTS"
+                } else {
+                    $"($name).($dep)=($variant) default"
+                }
 
-            let vf_stage = ($svc_dir | path join $"compose.($name).($dep).($variant).($stage).yml" | to-forward-slashes)
-            if ($vf_stage | path exists) {
-                $files = ($files | append $vf_stage)
-                log-included $ctx $vf_stage $"($reason) / stage: ($stage)"
+                let vf = ($svc_dir | path join $"compose.($name).($dep).($variant).yml" | to-forward-slashes)
+                if ($vf | path exists) {
+                    $files = ($files | append $vf)
+                    log-included $ctx $vf $reason
+                } else {
+                    log-skipped $ctx $vf $reason
+                }
+
+                let vf_stage = ($svc_dir | path join $"compose.($name).($dep).($variant).($stage).yml" | to-forward-slashes)
+                if ($vf_stage | path exists) {
+                    $files = ($files | append $vf_stage)
+                    log-included $ctx $vf_stage $"($reason) / stage: ($stage)"
+                }
             }
         }
 
