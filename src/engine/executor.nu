@@ -122,8 +122,13 @@ def render-env [content: string, ctx: record, ...excluded: string] {
                 if ($key | is-empty) or ($key in $excluded) {
                     $acc
                 } else {
-                    let resolved = try { resolve $val ($ctx | upsert env_vars $acc) } catch { $val }
-                    $acc | upsert $key $resolved
+                    let current = ($acc | get --optional $key | default "")
+                    if ($current | is-not-empty) and not ($current | str contains "{{") {
+                        $acc
+                    } else {
+                        let resolved = try { resolve $val ($ctx | upsert env_vars $acc) } catch { $val }
+                        $acc | upsert $key $resolved
+                    }
                 }
             }
         })
@@ -146,7 +151,12 @@ def render-env [content: string, ctx: record, ...excluded: string] {
             if ($key | is-empty) or ($key in $excluded) {
                 $line
             } else {
-                let resolved = try { resolve $val ($ctx | upsert env_vars $resolved_vars) } catch { $val }
+                let current = ($resolved_vars | get --optional $key | default "")
+                let resolved = if ($current | is-not-empty) and not ($current | str contains "{{") {
+                    $current
+                } else {
+                    try { resolve $val ($ctx | upsert env_vars $resolved_vars) } catch { $val }
+                }
                 $"($key)=($resolved)"
             }
         }
